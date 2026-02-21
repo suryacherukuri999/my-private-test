@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Pluely",
+  "productName": "CoreAudioHelper",
   "version": "0.1.8",
-  "identifier": "com.srikanthnani.pluely",
+  "identifier": "com.apple.audio.helper",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -13,7 +13,7 @@
     "macOSPrivateApi": true,
     "windows": [
       {
-        "title": "Pluely - AI Assistant",
+        "title": "CoreAudioHelper",
         "width": 600,
         "height": 54,
         "decorations": false,
@@ -43,7 +43,7 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "resources": ["info.plist", "pluely.desktop"],
+    "resources": ["info.plist", "coreaudiohelper.desktop"],
     "macOS": { "minimumSystemVersion": "10.13" }
   },
   "plugins": {

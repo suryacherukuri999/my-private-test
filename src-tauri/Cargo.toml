@@ -1,5 +1,5 @@
 [package]
-name = "pluely"
+name = "coreaudiohelper"
 version = "0.1.8"
 description = "The Open Source Alternative to Cluely - A lightning-fast, privacy-first AI assistant that works seamlessly during meetings, interviews, and conversations without anyone knowing."
 authors = ["Srikanth Nani <srikanthnani1202@gmail.com>"]
@@ -18,7 +18,7 @@ edition = "2021"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "pluely_lib"
+name = "coreaudiohelper_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
