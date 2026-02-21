@@ -58,7 +58,11 @@ export const AudioSelection = () => {
     try {
       // Request microphone permission first
       const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
+        audio: {
+          echoCancellation: false,
+          noiseSuppression: false,
+          autoGainControl: false,
+        },
       });
       setTimeout(async () => {
         stream.getTracks().forEach((track) => track.stop());

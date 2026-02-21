@@ -25,8 +25,18 @@ const AutoSpeechVADInternal = ({
   const { selectedSttProvider, allSttProviders } = useApp();
 
   const audioConstraints: MediaTrackConstraints = microphoneDeviceId
-    ? { deviceId: { exact: microphoneDeviceId } }
-    : { deviceId: "default" };
+    ? {
+        deviceId: { exact: microphoneDeviceId },
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      }
+    : {
+        deviceId: "default",
+        echoCancellation: false,
+        noiseSuppression: false,
+        autoGainControl: false,
+      };
 
   const vad = useMicVAD({
     userSpeakingThreshold: 0.6,

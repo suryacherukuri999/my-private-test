@@ -691,7 +691,11 @@ export function useSystemAudio() {
       if (capturing) {
         try {
           const mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: true,
+            audio: {
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
           });
           streamRef.current = mediaStream;
           setStream(mediaStream);
