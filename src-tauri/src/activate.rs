@@ -308,11 +308,20 @@ pub async fn deactivate_license_api(app: AppHandle) -> Result<ActivationResponse
 
 #[tauri::command]
 pub async fn validate_license_api(app: AppHandle) -> Result<ValidateResponse, String> {
-    // Get payment endpoint and API access key from environment
-    let payment_endpoint = get_payment_endpoint()?;
-    let api_access_key = get_api_access_key()?;
+    // Return inactive if backend endpoints aren't configured
+    let payment_endpoint = match get_payment_endpoint() {
+        Ok(ep) if !ep.is_empty() => ep,
+        _ => return Ok(ValidateResponse { is_active: false, last_validated_at: None }),
+    };
+    let api_access_key = match get_api_access_key() {
+        Ok(key) if !key.is_empty() => key,
+        _ => return Ok(ValidateResponse { is_active: false, last_validated_at: None }),
+    };
     let machine_id: String = app.machine_uid().get_machine_uid().unwrap().id.unwrap();
-    let (license_key, instance_id, _) = get_stored_credentials(&app).await?;
+    let (license_key, instance_id, _) = match get_stored_credentials(&app).await {
+        Ok(creds) => creds,
+        Err(_) => return Ok(ValidateResponse { is_active: false, last_validated_at: None }),
+    };
     let app_version: String = env!("CARGO_PKG_VERSION").to_string();
     let validate_request = ActivationRequest {
         license_key: license_key.clone(),

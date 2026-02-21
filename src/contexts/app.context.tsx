@@ -128,20 +128,25 @@ export const AppProvider = ({ children }: { children: ReactNode }) => {
   );
 
   const getActiveLicenseStatus = async () => {
-    const response: { is_active: boolean } = await invoke(
-      "validate_license_api"
-    );
-    setHasActiveLicense(response.is_active);
-    // Check if the auto configs are enabled
-    const autoConfigsEnabled = localStorage.getItem("auto-configs-enabled");
-    if (response.is_active && !autoConfigsEnabled) {
-      setScreenshotConfiguration({
-        mode: "auto",
-        autoPrompt: "Analyze the screenshot and provide insights",
-        enabled: false,
-      });
-      // Set the flag to true so that we don't change the mode again
-      localStorage.setItem("auto-configs-enabled", "true");
+    try {
+      const response: { is_active: boolean } = await invoke(
+        "validate_license_api"
+      );
+      setHasActiveLicense(response.is_active);
+      // Check if the auto configs are enabled
+      const autoConfigsEnabled = localStorage.getItem("auto-configs-enabled");
+      if (response.is_active && !autoConfigsEnabled) {
+        setScreenshotConfiguration({
+          mode: "auto",
+          autoPrompt: "Analyze the screenshot and provide insights",
+          enabled: false,
+        });
+        // Set the flag to true so that we don't change the mode again
+        localStorage.setItem("auto-configs-enabled", "true");
+      }
+    } catch (error) {
+      console.debug("License validation unavailable:", error);
+      setHasActiveLicense(false);
     }
   };
 
