@@ -12,11 +12,31 @@ import { invoke } from "@tauri-apps/api/core";
 import { ErrorBoundary } from "react-error-boundary";
 import { ErrorLayout } from "@/layouts";
 import { getPlatform } from "@/lib";
+import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 
 const App = () => {
   const { isHidden, systemAudio } = useApp();
   const { customizable } = useAppContext();
   const platform = getPlatform();
+
+  const handleBarDrag = async (e: React.MouseEvent) => {
+    // Only drag if clicking directly on the Card background, not on interactive children
+    const target = e.target as HTMLElement;
+    if (
+      target.closest("button") ||
+      target.closest("input") ||
+      target.closest("textarea") ||
+      target.closest('[role="button"]')
+    ) {
+      return;
+    }
+    e.preventDefault();
+    try {
+      await getCurrentWebviewWindow().startDragging();
+    } catch (err) {
+      console.error("Failed to start dragging:", err);
+    }
+  };
 
   const openDashboard = async () => {
     try {
@@ -41,7 +61,7 @@ const App = () => {
           isHidden ? "hidden pointer-events-none" : ""
         }`}
       >
-        <Card className="w-full flex flex-row items-center gap-2 p-2">
+        <Card className="w-full flex flex-row items-center gap-2 p-2 cursor-grab" onMouseDown={handleBarDrag}>
           <SystemAudio {...systemAudio} />
           {systemAudio?.capturing ? (
             <div className="flex flex-row items-center gap-2 justify-between w-full">
