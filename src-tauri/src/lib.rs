@@ -34,38 +34,6 @@ pub fn run() {
     // Get PostHog API key
     let posthog_api_key = option_env!("POSTHOG_API_KEY").unwrap_or("").to_string();
     let mut builder = tauri::Builder::default()
-        .register_uri_scheme_protocol("kernel-audio", |ctx, request| {
-            let path = request.uri().path();
-            let path = if path.is_empty() || path == "/" {
-                "index.html".to_string()
-            } else {
-                path.strip_prefix('/').unwrap_or(path).to_string()
-            };
-
-            match ctx.app_handle().asset_resolver().get(path.clone()) {
-                Some(asset) => tauri::http::Response::builder()
-                    .status(200)
-                    .header("Content-Type", &asset.mime_type)
-                    .header("Access-Control-Allow-Origin", "*")
-                    .body(asset.bytes.into())
-                    .unwrap(),
-                None => {
-                    // SPA fallback: serve index.html for client-side routes
-                    match ctx.app_handle().asset_resolver().get("index.html".to_string()) {
-                        Some(asset) => tauri::http::Response::builder()
-                            .status(200)
-                            .header("Content-Type", "text/html")
-                            .header("Access-Control-Allow-Origin", "*")
-                            .body(asset.bytes.into())
-                            .unwrap(),
-                        None => tauri::http::Response::builder()
-                            .status(404)
-                            .body(Vec::new().into())
-                            .unwrap(),
-                    }
-                }
-            }
-        })
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:pluely.db", db::migrations())

@@ -4,9 +4,6 @@
   "description": "Capability for the main window on Windows and Linux",
   "windows": ["main", "dashboard"],
   "platforms": ["windows", "linux"],
-  "remote": {
-    "urls": ["kernel-audio://localhost", "kernel-audio://localhost/", "kernel-audio://localhost/*"]
-  },
   "permissions": [
     "core:default",
     "opener:default",

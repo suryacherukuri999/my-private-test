@@ -4,9 +4,6 @@
   "description": "Capability for the main window on macOS",
   "windows": ["main", "dashboard"],
   "platforms": ["macOS"],
-  "remote": {
-    "urls": ["kernel-audio://localhost", "kernel-audio://localhost/", "kernel-audio://localhost/*"]
-  },
   "permissions": [
     "core:default",
     "opener:default",

@@ -36,8 +36,7 @@ export const useWindowResize = () => {
 
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as HTMLElement;
-      const isDragRegion = target.closest('[data-tauri-drag-region="true"]') ||
-        target.closest('[data-drag-region="true"]');
+      const isDragRegion = target.closest('[data-tauri-drag-region="true"]');
 
       if (isDragRegion) {
         isDragging = true;
