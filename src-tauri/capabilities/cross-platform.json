@@ -5,7 +5,7 @@
   "windows": ["main", "dashboard"],
   "platforms": ["windows", "linux"],
   "remote": {
-    "urls": ["kernel-audio://localhost", "kernel-audio://localhost/*"]
+    "urls": ["kernel-audio://localhost", "kernel-audio://localhost/", "kernel-audio://localhost/*"]
   },
   "permissions": [
     "core:default",

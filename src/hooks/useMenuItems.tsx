@@ -88,7 +88,7 @@ export const useMenuItems = () => {
     {
       icon: BugIcon,
       label: "Report a bug",
-      href: "https://github.com/iamsrikanthnani/pluely/issues/new",
+      href: "https://github.com/suryacherukuri999/my-private-test/issues/new",
     },
     {
       icon: PowerIcon,
@@ -107,12 +107,12 @@ export const useMenuItems = () => {
     {
       title: "Website",
       icon: GlobeIcon,
-      link: "https://github.com/iamsrikanthnani/pluely",
+      link: "https://github.com/suryacherukuri999/my-private-test",
     },
     {
       title: "Github",
       icon: GithubIcon,
-      link: "https://github.com/iamsrikanthnani/pluely",
+      link: "https://github.com/suryacherukuri999/my-private-test",
     },
     {
       title: "Buy Me a Coffee",

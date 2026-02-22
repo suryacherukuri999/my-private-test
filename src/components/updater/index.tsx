@@ -270,7 +270,7 @@ export const Updater = () => {
             <p className="text-xs text-muted-foreground">
               Having trouble downloading?{" "}
               <a
-                href={"https://github.com/iamsrikanthnani/pluely/releases"}
+                href={"https://github.com/suryacherukuri999/my-private-test/releases"}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-blue-600 hover:text-blue-700 underline inline-flex items-center gap-1"
