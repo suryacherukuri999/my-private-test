@@ -200,6 +200,7 @@ export async function fetchSTT(params: STTParams): Promise<string> {
         break; // Success
       } catch (e) {
         if (attempt < MAX_RETRIES) {
+          console.log(`[retry] STT request attempt ${attempt + 1}/${MAX_RETRIES} failed, retrying...`);
           await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
           continue;
         }

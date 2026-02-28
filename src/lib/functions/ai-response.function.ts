@@ -309,7 +309,7 @@ export async function* fetchAIResponse(params: {
           return;
         }
         if (attempt < MAX_RETRIES) {
-          // Wait before retrying: 500ms, 1000ms, 2000ms
+          console.log(`[retry] AI request attempt ${attempt + 1}/${MAX_RETRIES} failed, retrying...`);
           await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
           continue;
         }
