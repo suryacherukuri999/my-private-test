@@ -11,6 +11,13 @@ import { useState, useEffect } from "react";
 import { useApp } from "@/contexts";
 import { STORAGE_KEYS } from "@/config/constants";
 import { safeLocalStorage } from "@/lib/storage";
+import { invoke } from "@tauri-apps/api/core";
+
+interface NativeMicDevice {
+  id: string;
+  name: string;
+  is_default: boolean;
+}
 
 export const AudioSelection = () => {
   const { selectedAudioDevices, setSelectedAudioDevices } = useApp();
@@ -57,31 +64,33 @@ export const AudioSelection = () => {
     }
   };
 
-  // Load all audio devices (input and output)
+  // Load all audio devices (input from Rust backend, output from browser)
+  // Mic devices are loaded via cpal (native) to avoid getUserMedia which
+  // interferes with Zoom/Teams/Meet on macOS.
   const loadAudioDevices = async () => {
     setIsLoadingDevices(true);
     try {
-      // Request microphone permission first
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
-      setTimeout(async () => {
-        stream.getTracks().forEach((track) => track.stop());
-      }, 2000);
+      // Get mic devices from Rust backend (native cpal — no browser mic access)
+      const nativeMics = await invoke<NativeMicDevice[]>("list_mic_devices");
+      const audioInputs: MediaDeviceInfo[] = nativeMics.map((mic) => ({
+        deviceId: mic.id,
+        groupId: "",
+        kind: "audioinput" as MediaDeviceKind,
+        label: mic.name,
+        toJSON: () => ({ deviceId: mic.id, groupId: "", kind: "audioinput", label: mic.name }),
+      }));
 
-      // Enumerate all audio devices
-      const allDevices = await navigator.mediaDevices.enumerateDevices();
-      console.log(allDevices, "allDevices");
-      const audioInputs = allDevices.filter(
-        (device) => device.kind === "audioinput"
-      );
-      const audioOutputs = allDevices.filter(
-        (device) => device.kind === "audiooutput"
-      );
+      // Get output devices from browser (enumerateDevices without getUserMedia
+      // does not open the mic, so it's safe for Zoom)
+      let audioOutputs: MediaDeviceInfo[] = [];
+      try {
+        const allDevices = await navigator.mediaDevices.enumerateDevices();
+        audioOutputs = allDevices.filter(
+          (device) => device.kind === "audiooutput"
+        );
+      } catch (e) {
+        console.warn("Failed to enumerate output devices:", e);
+      }
 
       setDevices({ input: audioInputs, output: audioOutputs });
 

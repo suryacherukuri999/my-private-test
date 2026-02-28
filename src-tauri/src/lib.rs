@@ -9,8 +9,10 @@ use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Manager, WebviewWindow};
 use tauri_plugin_posthog::{init as posthog_init, PostHogConfig, PostHogOptions};
 use tokio::task::JoinHandle;
+mod mic;
 mod speaker;
 use capture::CaptureState;
+use mic::MicState;
 use speaker::VadConfig;
 
 #[cfg(target_os = "macos")]
@@ -40,6 +42,7 @@ pub fn run() {
                 .build(),
         )
         .manage(AudioState::default())
+        .manage(MicState::default())
         .manage(CaptureState::default())
         .manage(shortcuts::WindowVisibility {
             is_hidden: Mutex::new(false),
@@ -112,6 +115,10 @@ pub fn run() {
             speaker::update_vad_config,
             speaker::get_capture_status,
             speaker::get_audio_sample_rate,
+            mic::start_mic_capture,
+            mic::stop_mic_capture,
+            mic::is_mic_capturing,
+            mic::list_mic_devices,
         ])
         .setup(|app| {
             // Setup main window positioning

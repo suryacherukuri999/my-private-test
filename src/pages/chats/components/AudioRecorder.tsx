@@ -4,6 +4,8 @@ import { AudioVisualizer } from "@/pages/app/components/speech/audio-visualizer"
 import { shouldUsePluelyAPI, fetchSTT } from "@/lib";
 import { useApp } from "@/contexts";
 import { StopCircle, Send } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface AudioRecorderProps {
   onTranscriptionComplete: (text: string) => void;
@@ -17,15 +19,15 @@ export const AudioRecorder = ({
   onCancel,
 }: AudioRecorderProps) => {
   const { selectedSttProvider, allSttProviders } = useApp();
-  const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [isRecording, setIsRecording] = useState(false);
 
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
+  const audioChunksRef = useRef<string[]>([]);
   const startTimeRef = useRef<number>(0);
   const durationIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const maxDurationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const unlistenRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     startRecording();
@@ -41,52 +43,39 @@ export const AudioRecorder = ({
       clearTimeout(maxDurationTimeoutRef.current);
       maxDurationTimeoutRef.current = null;
     }
-    if (audioStream) {
-      audioStream.getTracks().forEach((track) => track.stop());
-      setAudioStream(null);
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
     }
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
-      mediaRecorderRef.current = null;
-    }
+    // Stop native mic capture
+    invoke("stop_mic_capture").catch(() => {});
+    setIsRecording(false);
   };
 
   const startRecording = async () => {
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
-      setAudioStream(stream);
+      // Start native mic capture via Rust backend (no browser getUserMedia)
+      await invoke("start_mic_capture", { deviceName: null });
+      setIsRecording(true);
 
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm")
-        ? "audio/webm"
-        : "audio/ogg";
-
-      const recorder = new MediaRecorder(stream, { mimeType });
-      mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
       startTimeRef.current = Date.now();
 
-      recorder.ondataavailable = (e) => {
-        if (e.data.size > 0) {
-          audioChunksRef.current.push(e.data);
+      // Listen for speech segments from Rust backend
+      const unlisten = await listen<string>(
+        "mic-speech-detected",
+        (event) => {
+          audioChunksRef.current.push(event.payload);
         }
-      };
-
-      recorder.start(100);
+      );
+      unlistenRef.current = unlisten;
 
       durationIntervalRef.current = setInterval(() => {
         setDuration(Date.now() - startTimeRef.current);
       }, 100);
 
       maxDurationTimeoutRef.current = setTimeout(() => {
-        if (mediaRecorderRef.current?.state === "recording") {
-          handleSend();
-        }
+        handleSend();
       }, MAX_DURATION);
     } catch (error) {
       console.error("Failed to start recording:", error);
@@ -101,17 +90,29 @@ export const AudioRecorder = ({
   };
 
   const handleSend = async () => {
-    if (!mediaRecorderRef.current || isTranscribing) return;
+    if (isTranscribing) return;
 
     setIsTranscribing(true);
 
-    const mimeType = mediaRecorderRef.current.mimeType;
-    const chunks = [...audioChunksRef.current];
+    // Get the last speech segment (most recent complete utterance)
+    const lastChunk = audioChunksRef.current[audioChunksRef.current.length - 1];
 
     cleanup();
 
+    if (!lastChunk) {
+      // No speech detected — cancel
+      onCancel();
+      return;
+    }
+
     try {
-      const audioBlob = new Blob(chunks, { type: mimeType });
+      // Convert base64 WAV to blob
+      const binaryString = atob(lastChunk);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      const audioBlob = new Blob([bytes], { type: "audio/wav" });
 
       const usePluelyAPI = await shouldUsePluelyAPI();
       const provider = allSttProviders.find(
@@ -141,9 +142,9 @@ export const AudioRecorder = ({
   return (
     <div className="border bg-background rounded-lg overflow-hidden">
       <div className="h-12 relative bg-muted/20">
-        {audioStream ? (
+        {isRecording ? (
           <div className="h-full w-full pt-3">
-            <AudioVisualizer stream={audioStream} isRecording={true} />
+            <AudioVisualizer stream={null} isRecording={true} />
           </div>
         ) : (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground">

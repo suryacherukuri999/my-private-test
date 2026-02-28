@@ -1,12 +1,12 @@
 import { fetchSTT } from "@/lib";
 import { UseCompletionReturn } from "@/types";
-import { useMicVAD } from "@ricky0123/vad-react";
 import { LoaderCircleIcon, MicIcon, MicOffIcon } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { Button } from "@/components";
 import { useApp } from "@/contexts";
-import { floatArrayToWav } from "@/lib/utils";
 import { shouldUsePluelyAPI } from "@/lib/functions/pluely.api";
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 interface AutoSpeechVADProps {
   submit: UseCompletionReturn["submit"];
@@ -22,37 +22,24 @@ const AutoSpeechVADInternal = ({
   microphoneDeviceId,
 }: AutoSpeechVADProps) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [listening, setListening] = useState(false);
   const { selectedSttProvider, allSttProviders } = useApp();
+  const unlistenRef = useRef<(() => void) | null>(null);
 
-  const audioConstraints: MediaTrackConstraints = microphoneDeviceId
-    ? {
-        deviceId: { exact: microphoneDeviceId },
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      }
-    : {
-        deviceId: "default",
-        echoCancellation: false,
-        noiseSuppression: false,
-        autoGainControl: false,
-      };
-
-  const vad = useMicVAD({
-    userSpeakingThreshold: 0.6,
-    startOnLoad: true,
-    additionalAudioConstraints: audioConstraints,
-    onSpeechEnd: async (audio) => {
+  // Handle speech detected from Rust backend (native mic capture via cpal)
+  const handleSpeechDetected = useCallback(
+    async (base64Audio: string) => {
       try {
-        // convert float32array to blob
-        const audioBlob = floatArrayToWav(audio, 16000, "wav");
+        const binaryString = atob(base64Audio);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        const audioBlob = new Blob([bytes], { type: "audio/wav" });
 
-        let transcription: string;
         const usePluelyAPI = await shouldUsePluelyAPI();
 
-        // Check if we have a configured speech provider
         if (!selectedSttProvider.provider && !usePluelyAPI) {
-          console.warn("No speech provider selected");
           setState((prev: any) => ({
             ...prev,
             error:
@@ -66,7 +53,6 @@ const AutoSpeechVADInternal = ({
         );
 
         if (!providerConfig && !usePluelyAPI) {
-          console.warn("Selected speech provider configuration not found");
           setState((prev: any) => ({
             ...prev,
             error:
@@ -77,8 +63,7 @@ const AutoSpeechVADInternal = ({
 
         setIsTranscribing(true);
 
-        // Use the fetchSTT function for all providers
-        transcription = await fetchSTT({
+        const transcription = await fetchSTT({
           provider: usePluelyAPI ? undefined : providerConfig,
           selectedProvider: selectedSttProvider,
           audio: audioBlob,
@@ -98,28 +83,104 @@ const AutoSpeechVADInternal = ({
         setIsTranscribing(false);
       }
     },
-  });
+    [selectedSttProvider, allSttProviders, submit, setState]
+  );
+
+  // Start native mic capture on mount (uses cpal in Rust — no browser getUserMedia)
+  useEffect(() => {
+    let cancelled = false;
+
+    const startCapture = async () => {
+      try {
+        const deviceName =
+          microphoneDeviceId && microphoneDeviceId !== "default"
+            ? microphoneDeviceId
+            : null;
+
+        await invoke("start_mic_capture", { deviceName });
+
+        if (!cancelled) {
+          setListening(true);
+          setEnableVAD(true);
+        }
+
+        const unlisten = await listen<string>(
+          "mic-speech-detected",
+          (event) => {
+            if (!cancelled) {
+              handleSpeechDetected(event.payload);
+            }
+          }
+        );
+
+        unlistenRef.current = unlisten;
+      } catch (error) {
+        console.error("Failed to start native mic capture:", error);
+        if (!cancelled) {
+          setState((prev: any) => ({
+            ...prev,
+            error: `Mic capture failed: ${error}`,
+          }));
+        }
+      }
+    };
+
+    startCapture();
+
+    return () => {
+      cancelled = true;
+      invoke("stop_mic_capture").catch(() => {});
+      if (unlistenRef.current) {
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+      setListening(false);
+    };
+  }, [microphoneDeviceId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleListening = async () => {
+    if (listening) {
+      await invoke("stop_mic_capture").catch(() => {});
+      if (unlistenRef.current) {
+        unlistenRef.current();
+        unlistenRef.current = null;
+      }
+      setListening(false);
+      setEnableVAD(false);
+    } else {
+      try {
+        const deviceName =
+          microphoneDeviceId && microphoneDeviceId !== "default"
+            ? microphoneDeviceId
+            : null;
+
+        await invoke("start_mic_capture", { deviceName });
+        setListening(true);
+        setEnableVAD(true);
+
+        const unlisten = await listen<string>(
+          "mic-speech-detected",
+          (event) => {
+            handleSpeechDetected(event.payload);
+          }
+        );
+        unlistenRef.current = unlisten;
+      } catch (error) {
+        console.error("Failed to resume mic capture:", error);
+      }
+    }
+  };
 
   return (
     <>
       <Button
         size="icon"
-        onClick={() => {
-          if (vad.listening) {
-            vad.pause();
-            setEnableVAD(false);
-          } else {
-            vad.start();
-            setEnableVAD(true);
-          }
-        }}
+        onClick={toggleListening}
         className="cursor-pointer"
       >
         {isTranscribing ? (
           <LoaderCircleIcon className="h-4 w-4 animate-spin text-green-500" />
-        ) : vad.userSpeaking ? (
-          <LoaderCircleIcon className="h-4 w-4 animate-spin" />
-        ) : vad.listening ? (
+        ) : listening ? (
           <MicOffIcon className="h-4 w-4 animate-pulse" />
         ) : (
           <MicIcon className="h-4 w-4" />
