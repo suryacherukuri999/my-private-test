@@ -290,25 +290,34 @@ export async function* fetchAIResponse(params: {
     const fetchFunction = url?.includes("http") ? fetch : tauriFetch;
 
     let response;
-    try {
-      response = await fetchFunction(url, {
-        method: curlJson.method || "POST",
-        headers,
-        body: curlJson.method === "GET" ? undefined : JSON.stringify(bodyObj),
-        signal,
-      });
-    } catch (fetchError) {
-      // Check if aborted
-      if (
-        signal?.aborted ||
-        (fetchError instanceof Error && fetchError.name === "AbortError")
-      ) {
-        return; // Silently return on abort
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        if (signal?.aborted) return;
+        response = await fetchFunction(url, {
+          method: curlJson.method || "POST",
+          headers,
+          body: curlJson.method === "GET" ? undefined : JSON.stringify(bodyObj),
+          signal,
+        });
+        break; // Success — exit retry loop
+      } catch (fetchError) {
+        if (
+          signal?.aborted ||
+          (fetchError instanceof Error && fetchError.name === "AbortError")
+        ) {
+          return;
+        }
+        if (attempt < MAX_RETRIES) {
+          // Wait before retrying: 500ms, 1000ms, 2000ms
+          await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
+          continue;
+        }
+        yield `Network error during API request: ${
+          fetchError instanceof Error ? fetchError.message : "Unknown error"
+        }`;
+        return;
       }
-      yield `Network error during API request: ${
-        fetchError instanceof Error ? fetchError.message : "Unknown error"
-      }`;
-      return;
     }
 
     if (!response.ok) {

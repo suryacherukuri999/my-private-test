@@ -187,16 +187,24 @@ export async function fetchSTT(params: STTParams): Promise<string> {
 
     const fetchFunction = url?.includes("http") ? fetch : tauriFetch;
 
-    // Send request
+    // Send request with retry on network errors
     let response: Response;
-    try {
-      response = await fetchFunction(url, {
-        method: curlJson.method || "POST",
-        headers: finalHeaders,
-        body: curlJson.method === "GET" ? undefined : body,
-      });
-    } catch (e) {
-      throw new Error(`Network error: ${e instanceof Error ? e.message : e}`);
+    const MAX_RETRIES = 3;
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        response = await fetchFunction(url, {
+          method: curlJson.method || "POST",
+          headers: finalHeaders,
+          body: curlJson.method === "GET" ? undefined : body,
+        });
+        break; // Success
+      } catch (e) {
+        if (attempt < MAX_RETRIES) {
+          await new Promise((r) => setTimeout(r, 500 * Math.pow(2, attempt)));
+          continue;
+        }
+        throw new Error(`Network error: ${e instanceof Error ? e.message : e}`);
+      }
     }
 
     if (!response.ok) {
