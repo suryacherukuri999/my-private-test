@@ -13,6 +13,7 @@ export const Audio = ({
   setState,
   startNewConversation,
   currentConversationId,
+  response,
 }: UseCompletionReturn) => {
   const { selectedSttProvider, pluelyApiEnabled, selectedAudioDevices } =
     useApp();
@@ -31,6 +32,7 @@ export const Audio = ({
             microphoneDeviceId={selectedAudioDevices.input}
             startNewConversation={startNewConversation}
             hasExistingChat={!!currentConversationId}
+            response={response}
           />
         ) : (
           <Button
