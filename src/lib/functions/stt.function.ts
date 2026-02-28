@@ -188,7 +188,7 @@ export async function fetchSTT(params: STTParams): Promise<string> {
     const fetchFunction = url?.includes("http") ? fetch : tauriFetch;
 
     // Send request with retry on network errors
-    let response: Response;
+    let response!: Response;
     const MAX_RETRIES = 3;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {

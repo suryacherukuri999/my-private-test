@@ -289,7 +289,7 @@ export async function* fetchAIResponse(params: {
 
     const fetchFunction = url?.includes("http") ? fetch : tauriFetch;
 
-    let response;
+    let response!: Response;
     const MAX_RETRIES = 3;
     for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
       try {
