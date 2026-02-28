@@ -92,7 +92,6 @@ pub fn start_mic_capture(
     state.stop_flag.store(false, Ordering::SeqCst);
     state.is_capturing.store(true, Ordering::SeqCst);
 
-    let stop_flag = state.is_capturing.clone(); // alias for the thread
     let stop_signal = state.stop_flag.clone();
     let app_clone = app.clone();
     let device_name_clone = device_name.clone();

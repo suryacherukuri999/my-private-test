@@ -11,6 +11,8 @@ export const Audio = ({
   setEnableVAD,
   submit,
   setState,
+  startNewConversation,
+  currentConversationId,
 }: UseCompletionReturn) => {
   const { selectedSttProvider, pluelyApiEnabled, selectedAudioDevices } =
     useApp();
@@ -27,6 +29,8 @@ export const Audio = ({
             setState={setState}
             setEnableVAD={setEnableVAD}
             microphoneDeviceId={selectedAudioDevices.input}
+            startNewConversation={startNewConversation}
+            hasExistingChat={!!currentConversationId}
           />
         ) : (
           <Button

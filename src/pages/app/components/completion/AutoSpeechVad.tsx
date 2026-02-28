@@ -1,7 +1,7 @@
 import { fetchSTT } from "@/lib";
 import { UseCompletionReturn } from "@/types";
 import { LoaderCircleIcon, MicIcon, MicOffIcon } from "lucide-react";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components";
 import { useApp } from "@/contexts";
 import { shouldUsePluelyAPI } from "@/lib/functions/pluely.api";
@@ -13,6 +13,8 @@ interface AutoSpeechVADProps {
   setState: UseCompletionReturn["setState"];
   setEnableVAD: UseCompletionReturn["setEnableVAD"];
   microphoneDeviceId: string;
+  startNewConversation: UseCompletionReturn["startNewConversation"];
+  hasExistingChat: boolean;
 }
 
 const AutoSpeechVADInternal = ({
@@ -20,15 +22,33 @@ const AutoSpeechVADInternal = ({
   setState,
   setEnableVAD,
   microphoneDeviceId,
+  startNewConversation,
+  hasExistingChat,
 }: AutoSpeechVADProps) => {
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [listening, setListening] = useState(false);
+  const [showChatChoice, setShowChatChoice] = useState(false);
   const { selectedSttProvider, allSttProviders } = useApp();
   const unlistenRef = useRef<(() => void) | null>(null);
 
-  // Handle speech detected from Rust backend (native mic capture via cpal)
+  // Stop mic capture helper
+  const stopMic = useCallback(async () => {
+    await invoke("stop_mic_capture").catch(() => {});
+    if (unlistenRef.current) {
+      unlistenRef.current();
+      unlistenRef.current = null;
+    }
+    setListening(false);
+    setEnableVAD(false);
+  }, [setEnableVAD]);
+
+  // Handle speech detected from Rust backend
   const handleSpeechDetected = useCallback(
     async (base64Audio: string) => {
+      // IMMEDIATELY stop mic — prevents further speech from being captured
+      // while response is generating
+      await stopMic();
+
       try {
         const binaryString = atob(base64Audio);
         const bytes = new Uint8Array(binaryString.length);
@@ -83,99 +103,94 @@ const AutoSpeechVADInternal = ({
         setIsTranscribing(false);
       }
     },
-    [selectedSttProvider, allSttProviders, submit, setState]
+    [selectedSttProvider, allSttProviders, submit, setState, stopMic]
   );
 
-  // Start native mic capture on mount (uses cpal in Rust — no browser getUserMedia)
-  useEffect(() => {
-    let cancelled = false;
+  // Start mic capture helper
+  const startMic = useCallback(async () => {
+    try {
+      const deviceName =
+        microphoneDeviceId && microphoneDeviceId !== "default"
+          ? microphoneDeviceId
+          : null;
 
-    const startCapture = async () => {
-      try {
-        const deviceName =
-          microphoneDeviceId && microphoneDeviceId !== "default"
-            ? microphoneDeviceId
-            : null;
+      await invoke("start_mic_capture", { deviceName });
+      setListening(true);
+      setEnableVAD(true);
 
-        await invoke("start_mic_capture", { deviceName });
-
-        if (!cancelled) {
-          setListening(true);
-          setEnableVAD(true);
+      const unlisten = await listen<string>(
+        "mic-speech-detected",
+        (event) => {
+          handleSpeechDetected(event.payload);
         }
+      );
+      unlistenRef.current = unlisten;
+    } catch (error) {
+      console.error("Failed to start mic capture:", error);
+      setState((prev: any) => ({
+        ...prev,
+        error: `Mic capture failed: ${error}`,
+      }));
+    }
+  }, [microphoneDeviceId, setEnableVAD, setState, handleSpeechDetected]);
 
-        const unlisten = await listen<string>(
-          "mic-speech-detected",
-          (event) => {
-            if (!cancelled) {
-              handleSpeechDetected(event.payload);
-            }
-          }
-        );
-
-        unlistenRef.current = unlisten;
-      } catch (error) {
-        console.error("Failed to start native mic capture:", error);
-        if (!cancelled) {
-          setState((prev: any) => ({
-            ...prev,
-            error: `Mic capture failed: ${error}`,
-          }));
-        }
-      }
-    };
-
-    startCapture();
-
-    return () => {
-      cancelled = true;
-      invoke("stop_mic_capture").catch(() => {});
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-      setListening(false);
-    };
-  }, [microphoneDeviceId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const toggleListening = async () => {
+  // Handle mic button click
+  const handleMicClick = async () => {
     if (listening) {
-      await invoke("stop_mic_capture").catch(() => {});
-      if (unlistenRef.current) {
-        unlistenRef.current();
-        unlistenRef.current = null;
-      }
-      setListening(false);
-      setEnableVAD(false);
+      await stopMic();
+      return;
+    }
+
+    // If there's an existing chat, show choice dialog
+    if (hasExistingChat) {
+      setShowChatChoice(true);
     } else {
-      try {
-        const deviceName =
-          microphoneDeviceId && microphoneDeviceId !== "default"
-            ? microphoneDeviceId
-            : null;
-
-        await invoke("start_mic_capture", { deviceName });
-        setListening(true);
-        setEnableVAD(true);
-
-        const unlisten = await listen<string>(
-          "mic-speech-detected",
-          (event) => {
-            handleSpeechDetected(event.payload);
-          }
-        );
-        unlistenRef.current = unlisten;
-      } catch (error) {
-        console.error("Failed to resume mic capture:", error);
-      }
+      // No existing chat — start mic directly
+      await startMic();
     }
   };
+
+  // User chose to continue on current chat
+  const handleContinueCurrentChat = async () => {
+    setShowChatChoice(false);
+    await startMic();
+  };
+
+  // User chose to start a new chat
+  const handleNewChat = async () => {
+    setShowChatChoice(false);
+    startNewConversation();
+    await startMic();
+  };
+
+  if (showChatChoice) {
+    return (
+      <div className="flex items-center gap-1">
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleContinueCurrentChat}
+          className="text-xs h-7 px-2"
+        >
+          Continue chat
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleNewChat}
+          className="text-xs h-7 px-2"
+        >
+          New chat
+        </Button>
+      </div>
+    );
+  }
 
   return (
     <>
       <Button
         size="icon"
-        onClick={toggleListening}
+        onClick={handleMicClick}
         className="cursor-pointer"
       >
         {isTranscribing ? (
